@@ -1186,6 +1186,8 @@ int exanic_ioctl_get_ifinfo(struct net_device *ndev, struct ifreq *ifr,
 }
 
 
+#define HAS_NDO_SIOCDEVPRIVATE  LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)  || \
+      ( defined(RHEL_RELEASE_CODE) && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 2) )
 /**
  * Handle ioctl request on a ExaNIC interface.
  */
@@ -1204,19 +1206,20 @@ int exanic_netdev_ioctl(struct net_device *ndev, struct ifreq *ifr,
             return exanic_ioctl_get_hw_timestamp(ndev, ifr, cmd);
         }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
+#if !(HAS_NDO_SIOCDEVPRIVATE)
     case EXAIOCGIFINFO:
         {
             return exanic_ioctl_get_ifinfo(ndev, ifr, cmd);
         }
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0) */
+#endif /*!(HAS_NDO_SIOCDEVPRIVATE)*/
 
     default:
         return -EOPNOTSUPP;
     }
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+
+#if HAS_NDO_SIOCDEVPRIVATE
 int exanic_netdev_siocdevprivate(struct net_device *ndev, struct ifreq *ifr,
                               void __user *data, int cmd)
 {
@@ -1233,12 +1236,18 @@ static struct net_device_ops exanic_ndos = {
     .ndo_start_xmit          = exanic_netdev_xmit,
     .ndo_set_rx_mode         = exanic_netdev_set_rx_mode,
     .ndo_set_mac_address     = exanic_netdev_set_mac_addr,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
+#if !(HAS_NDO_SIOCDEVPRIVATE)
     .ndo_do_ioctl            = exanic_netdev_ioctl,
 #else
     /* since linux 5.15.0 version and onwards ndo_eth_ioctl
      * is called for ethernet specific ioctls such as SIOCSHWTSTAMP
-     * and SIOCGHWTSTAMP and ndo_siocdevprivate deals with SIOCDEVPRIVATE */
+     * and SIOCGHWTSTAMP and ndo_siocdevprivate deals with SIOCDEVPRIVATE
+     * 
+     * RedHat(RockyLinux use a kernel of version 5.14.0 but also has 
+     * ndo_siocdevprivate defined.
+     * I'm not sure which version added ndo_siodevprivate,
+     * But at least 9.2 has.
+     * */
     .ndo_eth_ioctl           = exanic_netdev_ioctl,
     .ndo_siocdevprivate      = exanic_netdev_siocdevprivate,
 #endif
